@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  Trash2, Edit3, Check, X, Loader2, CreditCard, Wallet, Banknote, Search, ChevronRight
+  Trash2, Edit3, Check, X, Loader2, Banknote, ChevronRight
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import './App.css';
@@ -14,23 +14,15 @@ function App() {
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // 狀態管理：辨識中、確認中、編輯中
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
 
   const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
-  
-  // ✅ 已經替換為你的專屬 URL
   const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
-  
-  // ✅ 已經替換為你的 anon public API Key
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
 
-  // 🔄 初始化：從資料庫抓取
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
@@ -43,7 +35,6 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // 📸 掃描辨識
   const handleScan = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -67,7 +58,6 @@ function App() {
     };
   };
 
-  // 💾 儲存/更新到 Supabase
   const saveToDB = async (item) => {
     try {
       const res = await fetch(SUPABASE_REST, {
@@ -84,31 +74,24 @@ function App() {
         fetchData();
         setIsConfirming(false);
         setEditingItem(null);
+        setActiveTab('records'); // 儲存後跳轉到紀錄頁
       }
     } catch (e) { alert("儲存失敗"); }
   };
 
   // --- 視圖元件 ---
-
   const HomeView = () => (
-    <div className="view">
-      <header className="view-header">
-        <span className="subtitle">查看所有旅行消費</span>
-        <h1>旅行總支出</h1>
-      </header>
-      
+    <div className="view fade-in">
+      <header className="view-header"><h1>總覽</h1></header>
       <div className="main-card">
+        <div className="sub-title">旅行總支出</div>
         <div className="total-amount">
           <span className="symbol">¥</span>
           <span className="num">{history.reduce((s,i) => s + Number(i.amount_jpy), 0).toLocaleString()}</span>
         </div>
         <div className="sub-total">≈ NT$ {Math.round(history.reduce((s,i) => s + Number(i.amount_jpy), 0) * JPY_TO_TWD).toLocaleString()} · {history.length} 筆</div>
       </div>
-
-      <div className="section-title">
-        <h3>今日花費</h3>
-      </div>
-      
+      <div className="section-title"><h3>最新消費</h3></div>
       <div className="quick-list">
         {history.slice(0, 3).map((item, i) => (
           <div key={i} className="item-card" onClick={() => { setEditingItem(item); setIsConfirming(true); }}>
@@ -128,44 +111,93 @@ function App() {
   );
 
   const RecordsView = () => (
-    <div className="view">
+    <div className="view fade-in">
       <header className="view-header"><h1>所有紀錄</h1></header>
-      {history.map((item, i) => (
-        <div key={i} className="item-card shadow" onClick={() => { setEditingItem(item); setIsConfirming(true); }}>
-           <div className="item-info">
-              <div className="name">{item.shop_name}</div>
-              <div className="meta">{item.receipt_date} · {item.payment_method}</div>
-            </div>
-            <div className="item-price">
-              <div className="jpy bold">¥{item.amount_jpy}</div>
-              <Edit3 size={14} color="#ccc" />
-            </div>
-        </div>
-      ))}
+      <div className="list-container">
+        {history.map((item, i) => (
+          <div key={i} className="item-card shadow" onClick={() => { setEditingItem(item); setIsConfirming(true); }}>
+             <div className="item-info">
+                <div className="name">{item.shop_name}</div>
+                <div className="meta">{item.receipt_date} · {item.payment_method}</div>
+              </div>
+              <div className="item-price">
+                <div className="jpy bold">¥{item.amount_jpy}</div>
+                <Edit3 size={14} color="var(--text-secondary)" style={{marginTop:'4px'}} />
+              </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
-  // --- 覆蓋層：辨識中動畫 ---
+  // ✅ 新增：統計視圖
+  const StatsView = () => {
+    const catData = Object.values(history.reduce((acc, curr) => {
+      const cat = curr.category || '其他';
+      acc[cat] = acc[cat] || { name: cat, value: 0 };
+      acc[cat].value += Number(curr.amount_jpy);
+      return acc;
+    }, {}));
+
+    return (
+      <div className="view fade-in">
+        <header className="view-header"><h1>統計</h1></header>
+        <div className="card">
+          <h3>分類支出佔比</h3>
+          <div style={{ height: '250px', marginTop: '20px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={catData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {catData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(value) => `¥${value.toLocaleString()}`} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ✅ 新增：設定視圖
+  const SettingsView = () => (
+    <div className="view fade-in">
+      <header className="view-header"><h1>設定</h1></header>
+      <div className="menu-group">
+        <div className="menu-item">
+          <span>日幣匯率 (JPY to TWD)</span>
+          <span className="value">0.21</span>
+        </div>
+        <div className="menu-item">
+          <span>分帳人數</span>
+          <span className="value">10 人</span>
+        </div>
+        <div className="menu-item">
+          <span>資料庫連線</span>
+          <span className="value" style={{color: '#34C759'}}>已連線</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- 覆蓋層 ---
   if (isProcessing) {
     return (
       <div className="processing-overlay">
-        <div className="scan-window">
-          <div className="scan-line"></div>
-        </div>
-        <h2>AI 正在辨識收據...</h2>
-        <p>請稍候，這可能需要幾秒鐘</p>
+        <div className="scan-window"><div className="scan-line"></div></div>
+        <h2>AI 正在辨識...</h2>
+        <p>擷取收據明細中，請稍候</p>
       </div>
     );
   }
 
-  // --- 覆蓋層：確認/編輯畫面 (1:1 復刻) ---
   if (isConfirming && editingItem) {
     return (
-      <div className="edit-overlay">
-        <nav className="edit-nav">
-          <button onClick={() => setIsConfirming(false)}><X size={24} /></button>
-          <h2>確認收據內容</h2>
-          <button onClick={() => saveToDB(editingItem)} className="save-btn">確認儲存</button>
+      <div className="edit-overlay fade-in">
+        <nav className="edit-nav blur-header">
+          <button className="icon-btn" onClick={() => setIsConfirming(false)}><X size={24} /></button>
+          <h2>確認內容</h2>
+          <button onClick={() => saveToDB(editingItem)} className="save-btn">儲存</button>
         </nav>
         
         <div className="edit-content">
@@ -183,19 +215,20 @@ function App() {
             </div>
           </div>
 
-          <div className="edit-group items-list card">
-            <div className="list-header"><h3>購買明細</h3><span>+ 新增品項</span></div>
+          <div className="edit-group card">
+            <div className="list-header"><h3>購買明細</h3></div>
             {editingItem.items?.map((item, idx) => (
               <div key={idx} className="edit-item-row">
                 <div className="item-names">
-                  <input className="primary" value={item.translated_name} onChange={e => {
+                  <input className="primary-input" value={item.translated_name} onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].translated_name = e.target.value;
                     setEditingItem({...editingItem, items: newItems});
                   }} />
-                  <div className="secondary">{item.original_name}</div>
+                  <div className="secondary-text">{item.original_name}</div>
                 </div>
                 <div className="item-val">
+                  <span className="currency-symbol">¥</span>
                   <input type="number" value={item.price} onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].price = Number(e.target.value);
@@ -212,18 +245,26 @@ function App() {
 
   return (
     <div className="app-container">
-      {activeTab === 'home' && <HomeView />}
-      {activeTab === 'records' && <RecordsView />}
+      <main className="main-content">
+        {activeTab === 'home' && <HomeView />}
+        {activeTab === 'records' && <RecordsView />}
+        {activeTab === 'stats' && <StatsView />}
+        {activeTab === 'settings' && <SettingsView />}
+      </main>
       
-      <nav className="tab-bar">
-        <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}><Home /><span>首頁</span></button>
-        <button className={activeTab === 'records' ? 'active' : ''} onClick={() => setActiveTab('records')}><List /><span>紀錄</span></button>
-        <label className="scan-fab">
-          <Camera size={28} color="#fff" />
-          <input type="file" accept="image/*" onChange={handleScan} style={{ display: 'none' }} />
-        </label>
-        <button onClick={() => setActiveTab('stats')}><BarChart3 /><span>統計</span></button>
-        <button onClick={() => setActiveTab('settings')}><Settings /><span>設定</span></button>
+      <nav className="tab-bar blur-nav">
+        <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}><Home size={22} /><span>首頁</span></button>
+        <button className={activeTab === 'records' ? 'active' : ''} onClick={() => setActiveTab('records')}><List size={22} /><span>紀錄</span></button>
+        
+        <div className="fab-container">
+          <label className="scan-fab shadow-lg">
+            <Camera size={26} color="#fff" />
+            <input type="file" accept="image/*" onChange={handleScan} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}><BarChart3 size={22} /><span>統計</span></button>
+        <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}><Settings size={22} /><span>設定</span></button>
       </nav>
     </div>
   );
