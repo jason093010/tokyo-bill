@@ -20,7 +20,12 @@ function App() {
   const [isConfirming, setIsConfirming] = useState(false);
 
   const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
-  const SUPABASE_REST = 'https://你的專案ID.supabase.co/rest/v1/transactions'; // ⚠️ 請換成你的專案 URL
+  
+  // ✅ 已經替換為你的專屬 URL
+  const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
+  
+  // ✅ 已經替換為你的 anon public API Key
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
 
   // 🔄 初始化：從資料庫抓取
   useEffect(() => {
@@ -30,7 +35,7 @@ function App() {
   const fetchData = async () => {
     try {
       const res = await fetch(`${SUPABASE_REST}?order=receipt_date.desc`, {
-        headers: { 'apikey': '你的KEY', 'Authorization': 'Bearer 你的KEY' }
+        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
       });
       const data = await res.json();
       setHistory(data);
@@ -68,8 +73,8 @@ function App() {
       const res = await fetch(SUPABASE_REST, {
         method: 'POST',
         headers: { 
-          'apikey': '你的KEY', 
-          'Authorization': 'Bearer 你的KEY',
+          'apikey': ANON_KEY, 
+          'Authorization': `Bearer ${ANON_KEY}`,
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         },
