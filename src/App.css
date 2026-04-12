@@ -1,184 +1,77 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
-
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
+:root {
+  --ios-blue: #007AFF;
+  --ios-bg: #F2F2F7;
+  --ios-card: #FFFFFF;
+  --ios-text: #1C1C1E;
+  --ios-gray: #8E8E93;
 }
 
-.hero {
-  position: relative;
+body { background: var(--ios-bg); color: var(--ios-text); font-family: -apple-system, sans-serif; margin: 0; }
 
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
+/* 儀表板卡片 */
+.main-card {
+  background: var(--ios-card); padding: 30px 20px; border-radius: 24px;
+  margin: 15px 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center;
+}
+.total-amount { display: flex; align-items: baseline; justify-content: center; gap: 5px; }
+.total-amount .symbol { font-size: 1.5rem; font-weight: 600; }
+.total-amount .num { font-size: 2.8rem; font-weight: 800; letter-spacing: -1px; }
+.sub-total { color: var(--ios-gray); margin-top: 10px; font-size: 0.9rem; }
 
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
+/* 清單樣式 */
+.item-card {
+  background: var(--ios-card); margin: 0 20px 10px; padding: 16px; border-radius: 18px;
+  display: flex; align-items: center; gap: 15px;
+}
+.item-card.shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+.item-info { flex: 1; }
+.item-info .name { font-weight: 600; font-size: 1rem; }
+.item-info .meta { font-size: 0.8rem; color: var(--ios-gray); margin-top: 2px; }
+.item-price { text-align: right; }
+.item-price .jpy { font-weight: 700; font-size: 1rem; }
+.item-price .twd { font-size: 0.75rem; color: var(--ios-gray); }
 
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+/* 掃描動畫 */
+.processing-overlay {
+  position: fixed; inset: 0; background: #fff; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.scan-window {
+  width: 250px; height: 350px; border: 2px solid var(--ios-blue); border-radius: 20px;
+  position: relative; overflow: hidden; background: #f9f9f9; margin-bottom: 30px;
+}
+.scan-line {
+  width: 100%; height: 4px; background: linear-gradient(to bottom, transparent, var(--ios-blue));
+  position: absolute; top: 0; animation: scan 2s infinite linear;
+}
+@keyframes scan { 
+  0% { top: 0; } 100% { top: 100%; }
 }
 
-#center {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
+/* 編輯畫面 */
+.edit-overlay { position: fixed; inset: 0; background: var(--ios-bg); z-index: 900; overflow-y: auto; }
+.edit-nav { 
+  background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; 
+  align-items: center; position: sticky; top: 0; z-index: 10;
+}
+.save-btn { background: #FF9500; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; }
+.edit-content { padding: 20px; }
+.card { background: #fff; border-radius: 16px; padding: 15px; margin-bottom: 20px; }
+.edit-group label { font-size: 0.8rem; color: var(--ios-gray); display: block; margin-bottom: 5px; }
+.edit-group input, .edit-group select { 
+  width: 100%; border: none; background: #F2F2F7; padding: 12px; border-radius: 10px; font-size: 1rem; box-sizing: border-box;
 }
 
-#next-steps {
-  display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+/* 底部導覽 */
+.tab-bar {
+  position: fixed; bottom: 0; width: 100%; height: 85px; background: rgba(255,255,255,0.9);
+  backdrop-filter: blur(10px); display: flex; justify-content: space-around; padding-top: 10px;
 }
-
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
-}
-
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
-
-.ticks {
-  position: relative;
-  width: 100%;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
-
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
-  }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
-  }
+.tab-bar button { background: none; border: none; color: var(--ios-gray); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tab-bar button.active { color: var(--ios-blue); }
+.tab-bar span { font-size: 0.65rem; }
+.scan-fab {
+  width: 60px; height: 60px; background: var(--ios-blue); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; transform: translateY(-30px);
+  box-shadow: 0 5px 15px rgba(0,122,255,0.3);
 }
