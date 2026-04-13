@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, Link2
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
@@ -13,17 +13,18 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory] = useState([]);
   
-  // ⚙️ 核心設定 
+  // 🛡️ 關鍵修復：舊設定防護罩，確保缺少任何欄位都不會崩潰
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('tripSettings');
-    return saved ? JSON.parse(saved) : {
-      tripName: '日本之旅',
-      startDate: '2026-04-16',
-      endDate: '2026-04-21',
-      rate: 0.207,
-      budget: 200000,
-      split: 10,
-      schedule: "東京 4/16-4/21" 
+    const parsed = saved ? JSON.parse(saved) : {};
+    return {
+      tripName: parsed.tripName || '日本中部北陸之旅',
+      startDate: parsed.startDate || '2026-04-16',
+      endDate: parsed.endDate || '2026-04-21',
+      rate: parsed.rate || 0.21,
+      budget: parsed.budget || 200000,
+      split: parsed.split || 10,
+      schedule: parsed.schedule || "東京 4/16-4/21" 
     };
   });
 
@@ -32,7 +33,6 @@ function App() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
 
-  // 請確保在 .env 檔案中設定以下變數，並在 Cloudflare Worker 中手動部署後端代碼
   const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
   const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
@@ -50,7 +50,8 @@ function App() {
   };
 
   const determineRegion = (dateStr) => {
-    const lines = settings.schedule.split('\n');
+    const scheduleText = settings.schedule || "東京 4/16-4/21"; // 雙重防護
+    const lines = scheduleText.split('\n');
     for (let line of lines) {
       const parts = line.split(' ');
       if (parts.length >= 2) return parts[0]; 
@@ -72,7 +73,6 @@ function App() {
           canvas.height = img.height * ratio;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          // 壓縮為 JPEG，品質 70%
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
           resolve(compressedBase64);
         };
@@ -86,10 +86,7 @@ function App() {
     setIsProcessing(true);
     
     try {
-      // 1. 先在手機端將圖片壓縮 (瞬間完成)
       const compressedBase64 = await compressImage(file);
-      
-      // 2. 傳送輕量化圖片給 Cloudflare
       const response = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +172,6 @@ function App() {
 
   const HomeView = () => (
     <div className="view fade-in">
-      {/* 修正了深色模式下標題字體可能會消失的問題 */}
       <h1 className="page-title" style={{color: 'var(--text-primary)'}}>{settings.tripName}</h1>
       <div className="grid-2-home">
         <div className="card dash-card">
@@ -199,7 +195,6 @@ function App() {
         </div>
       </div>
       
-      {/* ✅ 行程地區與匯率警示卡片 */}
       <div className="card" style={{padding: '12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'15px'}}>
         <div style={{display:'flex', alignItems:'center', gap: '8px', color:'var(--blue)'}}>
           <MapPin size={16} />
