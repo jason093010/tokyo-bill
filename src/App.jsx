@@ -1,20 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle, Image as ImageIcon, Plus, PenSquare, Languages
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle, Image as ImageIcon, Plus, PenSquare, Languages, LogOut
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
 
-// 🚀 新增翻譯分類的顏色
 const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FFCC00', '#A2845E'];
 const PAY_COLORS = ['#34C759', '#007AFF', '#FF2D55', '#5AC8FA'];
 
-// 定義 Worker 處理類型
 const TYPE_RECEIPT_PARSE = 'receipt';
 const TYPE_TRANSLATE_JP = 'translate_jp';
 
+// API 設定
+const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
+const SUPABASE_URL = 'https://ghgqnwqedfevtklaglok.supabase.co';
+const SUPABASE_REST = `${SUPABASE_URL}/rest/v1/transactions`; 
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
+
 function App() {
+  // 🚀 核心新增：會員認證狀態 (Session)
+  const [session, setSession] = useState(() => {
+    const saved = localStorage.getItem('supabase_session');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // 登入畫面的狀態
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory] = useState([]);
   
@@ -27,7 +42,7 @@ function App() {
       endDate: parsed.endDate || '2026-04-21',
       rate: parsed.rate || 0.207,
       budget: parsed.budget || 200000,
-      split: parsed.split || 10,
+      split: parsed.split || 1, // 預設改為 1 人
       schedule: parsed.schedule || "東京 4/16-4/21" 
     };
   });
@@ -38,29 +53,69 @@ function App() {
   const [isConfirming, setIsConfirming] = useState(false);
   
   const [showActionSheet, setShowActionSheet] = useState(false);
-  // 用來區分當前 Action Sheet 是為了「記帳」還是「翻譯」
   const [actionSheetContext, setActionSheetContext] = useState(TYPE_RECEIPT_PARSE);
-  
-  // 🚀 新增狀態：儲存原始上傳圖片的 Base64，用於翻譯畫面顯示
   const [originalImageBase64, setOriginalImageBase64] = useState(null);
   
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
-  const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
-  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
+  // 🚀 核心新增：產生帶有使用者身分 Token 的 Headers
+  const getAuthHeaders = () => ({
+    'apikey': ANON_KEY,
+    'Authorization': `Bearer ${session?.access_token || ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'resolution=merge-duplicates'
+  });
 
-  useEffect(() => { fetchData(); }, []);
+  // 每次登入或啟動時抓取資料
+  useEffect(() => { 
+    if (session) fetchData(); 
+  }, [session]);
 
   const fetchData = async () => {
     try {
       const res = await fetch(`${SUPABASE_REST}?order=receipt_date.desc`, {
-        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
+        headers: getAuthHeaders() // 使用帶有 Token 的 Headers
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data);
+      }
+    } catch (e) { console.error("讀取失敗", e); }
+  };
+
+  // 🚀 核心新增：登入/註冊邏輯
+  const handleAuth = async (type) => {
+    if (!authEmail || !authPassword) return alert("請輸入信箱與密碼");
+    setAuthLoading(true);
+    try {
+      const endpoint = type === 'login' ? '/auth/v1/token?grant_type=password' : '/auth/v1/signup';
+      const res = await fetch(`${SUPABASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail, password: authPassword })
       });
       const data = await res.json();
-      setHistory(data);
-    } catch (e) { console.error("讀取失敗", e); }
+      
+      if (!res.ok) throw new Error(data.error_description || data.msg || '認證失敗');
+      
+      if (type === 'signup') {
+        alert("註冊成功！部分信箱可能需要去收確認信才能登入。如果沒收到請直接點擊登入試試。");
+      } else {
+        localStorage.setItem('supabase_session', JSON.stringify(data));
+        setSession(data);
+      }
+    } catch (error) {
+      alert(`錯誤: ${error.message}`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('supabase_session');
+    setSession(null);
+    setHistory([]);
   };
 
   const determineRegion = (dateStr) => {
@@ -102,8 +157,6 @@ function App() {
     
     try {
       const compressedBase64 = await compressImage(file);
-      
-      // 🚀 新增：辨識前先儲存原始圖片的 Base64，用於翻譯畫面顯示
       setOriginalImageBase64(compressedBase64);
       
       if (actionSheetContext === TYPE_TRANSLATE_JP) {
@@ -111,11 +164,9 @@ function App() {
       } else {
         await handleReceiptParse(compressedBase64);
       }
-      
     } catch (err) { 
-      alert(`網路連線異常或辨識逾時，請確認網路狀態。\n錯誤代碼: ${err.message}`); 
-    }
-    finally { 
+      alert(`網路連線異常或辨識逾時。\n錯誤: ${err.message}`); 
+    } finally { 
       setIsProcessing(false); 
       e.target.value = ''; 
     }
@@ -125,27 +176,18 @@ function App() {
     const response = await fetch(WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64Data, payer_avatar: 'Jason', type: TYPE_RECEIPT_PARSE }),
+      // 傳送使用者名稱給 AI 做預設記帳人
+      body: JSON.stringify({ imageBase64: base64Data, payer_avatar: session?.user?.email?.split('@')[0] || '我', type: TYPE_RECEIPT_PARSE }),
     });
-    
     const result = await response.json();
-    
     if (result.success && result.data) {
       if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
-        alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
-        return; 
+        alert("⚠️ 收據影像太模糊，請重新拍攝！"); return; 
       }
-
-      const autoRegion = determineRegion(result.data.receipt_date);
-      setEditingItem({ 
-        ...result.data, 
-        location: autoRegion,
-        tax_type: result.data.tax_type || '内税',
-        payer_avatar: 'Jason'
-      });
+      setEditingItem({ ...result.data, location: determineRegion(result.data.receipt_date), tax_type: result.data.tax_type || '内税' });
       setIsConfirming(true);
     } else {
-      alert(`記帳解析失敗: ${result.error || '未知的 AI 錯誤'}`);
+      alert(`解析失敗: ${result.error}`);
     }
   };
 
@@ -155,18 +197,12 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64: base64Data, type: TYPE_TRANSLATE_JP }),
     });
-    
     const result = await response.json();
-    
     if (result.success && result.data) {
-      setEditingItem({
-        type: TYPE_TRANSLATE_JP,
-        ...result.data,
-        dedupe_id: `${Date.now()}_translate`
-      });
+      setEditingItem({ type: TYPE_TRANSLATE_JP, ...result.data, dedupe_id: `${Date.now()}_translate` });
       setIsConfirming(true);
     } else {
-      alert(`翻譯失敗: ${result.error || '未知的 AI 錯誤'}`);
+      alert(`翻譯失敗: ${result.error}`);
     }
   };
 
@@ -174,36 +210,23 @@ function App() {
     setShowActionSheet(false);
     const today = new Date().toISOString().split('T')[0];
     setEditingItem({
-      receipt_date: today,
-      shop_name: '',
-      amount_jpy: 0,
-      tax_type: '内税',
-      category: '餐飲',
-      payment_method: '現金',
-      location: determineRegion(today),
-      payer_avatar: 'Jason',
-      items: [],
-      dedupe_id: `${Date.now()}_manual`
+      receipt_date: today, shop_name: '', amount_jpy: 0, tax_type: '内税', category: '餐飲',
+      payment_method: '現金', location: determineRegion(today), payer_avatar: session?.user?.email?.split('@')[0] || '我', items: [], dedupe_id: `${Date.now()}_manual`
     });
     setIsConfirming(true);
   };
 
   const saveToDB = async (item) => {
-    if (item.type === TYPE_TRANSLATE_JP) {
-      alert("此為翻譯結果，無法直接儲存為帳目。請手動建立記帳項目。");
-      return;
-    }
-    if (!item.shop_name || !item.amount_jpy) {
-      alert("請輸入店名與總金額！");
-      return;
-    }
+    if (item.type === TYPE_TRANSLATE_JP) return alert("此為翻譯結果，請手動建立記帳項目。");
+    if (!item.shop_name || !item.amount_jpy) return alert("請輸入店名與總金額！");
+    
+    // 🚀 核心新增：確保寫入資料庫時，蓋上使用者的專屬身分證
+    item.user_id = session.user.id;
+
     try {
       const res = await fetch(SUPABASE_REST, {
         method: 'POST',
-        headers: { 
-          'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}`,
-          'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(item)
       });
       if (res.ok) {
@@ -211,8 +234,10 @@ function App() {
         setIsConfirming(false);
         setEditingItem(null);
         setActiveTab('records'); 
+      } else {
+        throw new Error("權限不足或儲存失敗");
       }
-    } catch (e) { alert("儲存失敗"); }
+    } catch (e) { alert(e.message); }
   };
 
   const deleteRecord = async (id) => {
@@ -220,10 +245,10 @@ function App() {
     try {
       const res = await fetch(`${SUPABASE_REST}?id=eq.${id}`, {
         method: 'DELETE',
-        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
+        headers: getAuthHeaders()
       });
       if (res.ok) fetchData();
-    } catch (e) { alert('刪除時發生錯誤'); }
+    } catch (e) { alert('刪除失敗'); }
   };
 
   const saveSettings = () => {
@@ -231,11 +256,48 @@ function App() {
     alert('設定已更新');
   };
 
+  // -------------------------------------------------------------
+  // 🔐 登入畫面 UI (如果尚未登入，只會顯示這個畫面)
+  // -------------------------------------------------------------
+  if (!session) {
+    return (
+      <div className="app-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px', animation: 'fadeIn 0.5s ease-out' }}>
+          <h1 className="page-title" style={{ fontSize: '2.2rem', marginBottom: '10px' }}>旅帳助手</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>登入您的專屬帳號以同步資料</p>
+        </div>
+
+        <div className="card fade-in" style={{ padding: '30px 20px' }}>
+          <div className="edit-group">
+            <label>電子信箱</label>
+            <input type="email" placeholder="輸入 Email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} style={{ background: 'var(--bg-color)' }} />
+          </div>
+          <div className="edit-group" style={{ marginTop: '20px' }}>
+            <label>密碼 (至少 6 位數)</label>
+            <input type="password" placeholder="輸入密碼" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={{ background: 'var(--bg-color)' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '15px', marginTop: '35px' }}>
+            <button onClick={() => handleAuth('signup')} disabled={authLoading} style={{ flex: 1, padding: '16px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: 'none', borderRadius: '16px', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}>
+              註冊新帳號
+            </button>
+            <button onClick={() => handleAuth('login')} disabled={authLoading} style={{ flex: 1, padding: '16px', background: 'var(--blue)', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}>
+              {authLoading ? '處理中...' : '登入'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 📱 主應用程式邏輯 (以下皆為登入後才可見)
+  // -------------------------------------------------------------
+
   const totalJPY = history.reduce((s,i) => s + Number(i.amount_jpy), 0);
   const todayStr = new Date().toISOString().split('T')[0];
   const todayJPY = history.filter(h => h.receipt_date === todayStr).reduce((s,i) => s + Number(i.amount_jpy), 0);
   const budgetPercent = Math.min(Math.round((totalJPY / settings.budget) * 100), 100);
-  
   const getTripStatus = () => {
     const start = new Date(settings.startDate);
     const end = new Date(settings.endDate);
@@ -271,7 +333,6 @@ function App() {
           <div className="dash-val" style={{fontSize: '1.1rem', marginTop: '6px', color: 'var(--text-primary)'}}>{getTripStatus()}</div>
         </div>
       </div>
-      
       <div className="card" style={{padding: '12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'15px'}}>
         <div style={{display:'flex', alignItems:'center', gap: '8px', color:'var(--blue)'}}>
           <MapPin size={16} />
@@ -282,7 +343,6 @@ function App() {
           <AlertCircle size={15} style={{color: 'var(--blue)'}} />
         </div>
       </div>
-
       <h3 className="section-title">今日花費</h3>
       <div className="list-container">
         {history.filter(h => h.receipt_date === todayStr).map((item, i) => (
@@ -313,7 +373,6 @@ function App() {
       acc[key].push(curr);
       return acc;
     }, {});
-
     return (
       <div className="view fade-in">
         <div className="card total-banner">
@@ -321,12 +380,10 @@ function App() {
           <div className="val" style={{color: 'var(--text-primary)'}}>¥{totalJPY.toLocaleString()}</div>
           <div className="meta">≈ NT${Math.round(totalJPY * settings.rate).toLocaleString()} · {history.length} 筆</div>
         </div>
-
         <div className="segmented-control">
           <button className={recordView === 'date' ? 'active' : ''} onClick={() => setRecordView('date')}>按日期</button>
           <button className={recordView === 'category' ? 'active' : ''} onClick={() => setRecordView('category')}>按類別</button>
         </div>
-
         {Object.entries(grouped).sort((a,b) => recordView === 'date' ? b[0].localeCompare(a[0]) : 0).map(([key, items]) => (
           <div key={key} className="date-group">
             <div className="date-header">
@@ -421,6 +478,18 @@ function App() {
   const SettingsView = () => (
     <div className="view fade-in">
       <h1 className="page-title" style={{color: 'var(--text-primary)'}}>設定</h1>
+      
+      {/* 🚀 新增：帳號資訊區塊 */}
+      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--blue-light)', border: '1px solid var(--blue)' }}>
+        <div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--blue)', fontWeight: '600', marginBottom: '4px' }}>目前登入帳號</div>
+          <div style={{ fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: '700' }}>{session?.user?.email}</div>
+        </div>
+        <button onClick={handleLogout} style={{ background: 'var(--card-bg)', color: '#FF3B30', border: 'none', padding: '10px 15px', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <LogOut size={16} /> 登出
+        </button>
+      </div>
+
       <div className="menu-group">
         <div className="menu-item"><span>旅程名稱</span><input className="settings-input" style={{textAlign:'right', width:'150px'}} value={settings.tripName} onChange={e => setSettings({...settings, tripName: e.target.value})} /></div>
         <div className="menu-item"><span>出發日期</span><input type="date" className="settings-input" value={settings.startDate} onChange={e => setSettings({...settings, startDate: e.target.value})} /></div>
@@ -451,7 +520,7 @@ function App() {
       <div className="processing-overlay">
         <div className="scan-window"><div className="scan-line"></div></div>
         <h2 style={{color: '#fff', letterSpacing: '1px'}}>AI 正在辨識...</h2>
-        <p style={{color: 'rgba(255,255,255,0.7)', fontSize:'0.9rem'}}>擷取收據明細、稅制與折扣</p>
+        <p style={{color: 'rgba(255,255,255,0.7)', fontSize:'0.9rem'}}>請稍候，由雲端大腦處理中</p>
       </div>
     );
   }
@@ -459,39 +528,29 @@ function App() {
   if (isConfirming && editingItem) {
     if (editingItem.type === TYPE_TRANSLATE_JP) {
       return (
-        // 🚀 修改：為翻譯視窗加上特殊的類別 translate-overlay 
         <div className="edit-overlay fade-in translate-overlay">
           <nav className="edit-nav blur-header">
-            {/* 🚀 修改：取消按鈕同時清除圖片狀態 */}
             <button className="icon-btn" onClick={() => { setIsConfirming(false); setOriginalImageBase64(null); }}><X size={24} /></button>
             <h2 style={{color: 'var(--text-primary)'}}>翻譯與對照</h2>
             <div style={{width: '32px'}}></div>
           </nav>
           
-          {/* 🚀 究極修改：Kuilkuil 風格雙面板佈局核心 */}
           <div className="translate-panes-wrapper">
-            
-            {/* ⬆️ 上半部區域：原始圖片 + OCR 原文 */}
             <div className="translate-pane top-pane scroll-pane">
               <div className="pane-content">
-                {/* 顯示原始上傳圖片 */}
                 {originalImageBase64 && (
                     <img src={`data:image/jpeg;base64,${originalImageBase64}`} alt="Original" className="original-preview" />
                 )}
                 <div className="list-header"><h3 style={{color: 'var(--text-secondary)'}}>日文原文 (OCR)</h3></div>
-                {/* 使用特殊的 ocr-text 類別處理貼近原始排版的換行 */}
                 <p className="ocr-text">{editingItem.original_text || '無法偵測到文字'}</p>
               </div>
             </div>
 
-            {/* ⬇️ 下半部區域：繁中翻譯 */}
             <div className="translate-pane bottom-pane scroll-pane">
               <div className="pane-content">
                 <div className="list-header"><h3 style={{color: 'var(--blue)'}}>繁中翻譯 (AI)</h3></div>
-                {/* 使用特殊的 translation-text 類別處理貼近原始排版的換行 */}
                 <p className="translation-text">{editingItem.translated_text || '翻譯失敗'}</p>
                 
-                {/* 整合金額換算提示卡 */}
                 {editingItem.price_jpy && (
                   <div className="price-alert-card">
                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
@@ -619,7 +678,6 @@ function App() {
         </div>
       )}
 
-      {/* 隱藏的檔案輸入框，透過 useRef 觸發 */}
       <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileSelect} style={{ display: 'none' }} />
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} />
       
@@ -627,7 +685,6 @@ function App() {
         <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}><Home size={22} /><span>首頁</span></button>
         <button className={activeTab === 'records' ? 'active' : ''} onClick={() => setActiveTab('records')}><List size={22} /><span>紀錄</span></button>
         <div className="fab-container">
-          {/* FAB 預設為記帳上下文 */}
           <div className="scan-fab shadow-lg" onClick={() => { setActionSheetContext(TYPE_RECEIPT_PARSE); setShowActionSheet(true); }}>
             <Camera size={26} color="#fff" />
           </div>
