@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import './App.css';
@@ -23,7 +23,7 @@ function App() {
       rate: 0.21,
       budget: 200000,
       split: 10,
-      schedule: "東京 4/16-4/21" // 支援多行，自動判定地區
+      schedule: "東京 4/16-4/21" 
     };
   });
 
@@ -48,7 +48,6 @@ function App() {
     } catch (e) { console.error("讀取失敗", e); }
   };
 
-  // 自動根據日期判斷地區
   const determineRegion = (dateStr) => {
     const lines = settings.schedule.split('\n');
     for (let line of lines) {
@@ -104,6 +103,22 @@ function App() {
         setActiveTab('records'); 
       }
     } catch (e) { alert("儲存失敗"); }
+  };
+
+  // 🗑️ 新增：刪除單筆資料功能
+  const deleteRecord = async (id) => {
+    if (!window.confirm('確定要刪除這筆紀錄嗎？')) return;
+    try {
+      const res = await fetch(`${SUPABASE_REST}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
+      });
+      if (res.ok) {
+        fetchData(); // 刪除成功後重新讀取畫面
+      } else {
+        alert('刪除失敗，請檢查網路連線。');
+      }
+    } catch (e) { alert('刪除時發生錯誤'); }
   };
 
   const saveSettings = () => {
@@ -168,7 +183,10 @@ function App() {
             </div>
             <div className="item-price">
               <div className="jpy">¥{item.amount_jpy}</div>
-              <div className="twd">NT${Math.round(item.amount_jpy * settings.rate)}</div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                <Edit3 size={15} color="var(--text-secondary)" />
+                <Trash2 size={15} color="#FF3B30" onClick={(e) => { e.stopPropagation(); deleteRecord(item.id); }} />
+              </div>
             </div>
           </div>
         ))}
@@ -215,7 +233,11 @@ function App() {
                 </div>
                 <div className="item-price">
                   <div className="jpy">¥{item.amount_jpy}</div>
-                  <Edit3 size={14} color="var(--text-secondary)" style={{marginTop:'4px', float:'right'}} />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                    <Edit3 size={15} color="var(--text-secondary)" />
+                    {/* 🗑️ 點擊垃圾桶時會攔截事件 (stopPropagation)，避免打開編輯視窗 */}
+                    <Trash2 size={15} color="#FF3B30" onClick={(e) => { e.stopPropagation(); deleteRecord(item.id); }} />
+                  </div>
                 </div>
               </div>
             ))}
