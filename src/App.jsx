@@ -1,19 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle, Image as ImageIcon, Plus, PenSquare
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
 
-const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93'];
+const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FFCC00'];
 const PAY_COLORS = ['#34C759', '#007AFF', '#FF2D55', '#5AC8FA'];
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory] = useState([]);
   
-  // 🛡️ 關鍵修復：舊設定防護罩，確保缺少任何欄位都不會崩潰
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('tripSettings');
     const parsed = saved ? JSON.parse(saved) : {};
@@ -32,6 +31,12 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
+  
+  // 🚀 新增狀態：控制 Action Sheet 的顯示
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  // 用來觸發隱藏的 input file
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
   const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
@@ -50,7 +55,7 @@ function App() {
   };
 
   const determineRegion = (dateStr) => {
-    const scheduleText = settings.schedule || "東京 4/16-4/21"; // 雙重防護
+    const scheduleText = settings.schedule || "東京 4/16-4/21"; 
     const lines = scheduleText.split('\n');
     for (let line of lines) {
       const parts = line.split(' ');
@@ -80,7 +85,8 @@ function App() {
     });
   };
 
-  const handleScan = async (e) => {
+  const handleFileSelect = async (e) => {
+    setShowActionSheet(false); // 關閉選單
     const file = e.target.files[0];
     if (!file) return;
     setIsProcessing(true);
@@ -116,10 +122,36 @@ function App() {
     } catch (err) { 
       alert(`網路連線異常或辨識逾時，請確認網路狀態。\n錯誤代碼: ${err.message}`); 
     }
-    finally { setIsProcessing(false); }
+    finally { 
+      setIsProcessing(false); 
+      e.target.value = ''; // 重置 input 以便下次能選同一張照片
+    }
+  };
+
+  // 🚀 新增：手動建立空白表單的功能
+  const handleManualEntry = () => {
+    setShowActionSheet(false);
+    const today = new Date().toISOString().split('T')[0];
+    setEditingItem({
+      receipt_date: today,
+      shop_name: '',
+      amount_jpy: 0,
+      tax_type: '内税',
+      category: '餐飲',
+      payment_method: '現金',
+      location: determineRegion(today),
+      payer_avatar: 'Jason',
+      items: [],
+      dedupe_id: `${Date.now()}_manual`
+    });
+    setIsConfirming(true);
   };
 
   const saveToDB = async (item) => {
+    if (!item.shop_name || !item.amount_jpy) {
+      alert("請輸入店名與總金額！");
+      return;
+    }
     try {
       const res = await fetch(SUPABASE_REST, {
         method: 'POST',
@@ -390,12 +422,13 @@ function App() {
         
         <div className="edit-content">
           <div className="card">
-            <div className="edit-group"><label>店家名稱</label><input value={editingItem.shop_name} onChange={e => setEditingItem({...editingItem, shop_name: e.target.value})} /></div>
+            <div className="edit-group"><label>店家名稱</label><input placeholder="請輸入店名" value={editingItem.shop_name} onChange={e => setEditingItem({...editingItem, shop_name: e.target.value})} /></div>
             <div className="grid-2">
               <div className="edit-group"><label>日期</label><input type="date" value={editingItem.receipt_date} onChange={e => setEditingItem({...editingItem, receipt_date: e.target.value})} /></div>
               <div className="edit-group"><label>分類</label>
+                {/* 🚀 擴充分類：加入娛樂與生活 */}
                 <select value={editingItem.category} onChange={e => setEditingItem({...editingItem, category: e.target.value})}>
-                  <option>餐飲</option><option>購物</option><option>交通</option><option>住宿</option><option>門票</option><option>藥品</option><option>其他</option>
+                  <option>餐飲</option><option>購物</option><option>交通</option><option>住宿</option><option>門票</option><option>娛樂</option><option>生活</option><option>藥品</option><option>其他</option>
                 </select>
               </div>
             </div>
@@ -420,15 +453,15 @@ function App() {
               </div>
             </div>
             <div className="edit-group" style={{marginTop:'10px'}}><label>總額 (JPY)</label>
-              <input type="number" style={{fontSize:'1.8rem', fontWeight:'800', color:'var(--blue)'}} value={editingItem.amount_jpy} onChange={e => setEditingItem({...editingItem, amount_jpy: Number(e.target.value)})} />
+              <input type="number" style={{fontSize:'1.8rem', fontWeight:'800', color:'var(--blue)'}} value={editingItem.amount_jpy || ''} placeholder="0" onChange={e => setEditingItem({...editingItem, amount_jpy: Number(e.target.value)})} />
             </div>
           </div>
 
           <div className="card">
-            <div className="list-header"><h3 style={{color: 'var(--text-primary)'}}>購買明細</h3><span className="add-btn" onClick={() => setEditingItem({...editingItem, items: [...(editingItem.items||[]), {translated_name:'', price:0}]})}>+ 新增品項</span></div>
+            <div className="list-header"><h3 style={{color: 'var(--text-primary)'}}>購買明細</h3><span className="add-btn" onClick={() => setEditingItem({...editingItem, items: [...(editingItem.items||[]), {translated_name:'', price:0}]})}><Plus size={16} style={{verticalAlign:'middle', marginRight:'4px'}}/>新增品項</span></div>
             {editingItem.items && editingItem.items.map((item, idx) => (
-              <div key={idx} className="edit-item-row">
-                <div className="item-names">
+              <div key={idx} className="edit-item-row" style={{position: 'relative'}}>
+                <div className="item-names" style={{paddingRight: '30px'}}>
                   <input className="primary-input" placeholder="中文品名" value={item.translated_name || ''} onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].translated_name = e.target.value;
@@ -438,14 +471,25 @@ function App() {
                 </div>
                 <div className="item-val">
                   <span className="currency-symbol">¥</span>
-                  <input type="number" value={item.price || 0} onChange={e => {
+                  <input type="number" value={item.price || ''} placeholder="0" onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].price = Number(e.target.value);
                     setEditingItem({...editingItem, items: newItems});
                   }} />
                 </div>
+                {/* 🚀 新增功能：刪除單筆明細 */}
+                <button 
+                  onClick={() => {
+                    const newItems = editingItem.items.filter((_, index) => index !== idx);
+                    setEditingItem({...editingItem, items: newItems});
+                  }}
+                  style={{position: 'absolute', right: 0, top: '15px', background:'none', border:'none', color:'#FF3B30', padding: '5px'}}
+                >
+                  <X size={18} />
+                </button>
               </div>
             ))}
+            {(!editingItem.items || editingItem.items.length === 0) && <div className="empty-state">尚無明細資料</div>}
           </div>
         </div>
       </div>
@@ -461,14 +505,31 @@ function App() {
         {activeTab === 'settings' && <SettingsView />}
       </main>
       
+      {/* 🚀 新增：iOS 風格底部彈出選單 (Action Sheet) */}
+      {showActionSheet && (
+        <div className="action-sheet-overlay" onClick={() => setShowActionSheet(false)}>
+          <div className="action-sheet fade-up" onClick={e => e.stopPropagation()}>
+            <div className="sheet-menu">
+              <button onClick={() => cameraInputRef.current.click()}><Camera size={20} /> 拍照掃描</button>
+              <button onClick={() => fileInputRef.current.click()}><ImageIcon size={20} /> 從相簿選擇</button>
+              <button onClick={handleManualEntry}><PenSquare size={20} /> 手動輸入紀錄</button>
+            </div>
+            <button className="sheet-cancel" onClick={() => setShowActionSheet(false)}>取消</button>
+          </div>
+        </div>
+      )}
+
+      {/* 隱藏的檔案輸入框，透過 useRef 觸發 */}
+      <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileSelect} style={{ display: 'none' }} />
+      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} />
+      
       <nav className="tab-bar blur-nav">
         <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}><Home size={22} /><span>首頁</span></button>
         <button className={activeTab === 'records' ? 'active' : ''} onClick={() => setActiveTab('records')}><List size={22} /><span>紀錄</span></button>
         <div className="fab-container">
-          <label className="scan-fab shadow-lg">
+          <div className="scan-fab shadow-lg" onClick={() => setShowActionSheet(true)}>
             <Camera size={26} color="#fff" />
-            <input type="file" accept="image/*" onChange={handleScan} style={{ display: 'none' }} />
-          </label>
+          </div>
         </div>
         <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}><BarChart3 size={22} /><span>統計</span></button>
         <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}><Settings size={22} /><span>設定</span></button>
