@@ -1,22 +1,40 @@
 :root {
-  --bg-color: #F2F2F7; --card-bg: #FFFFFF; --text-primary: #000000; --text-secondary: #8E8E93;
-  --blue: #007AFF; --blue-light: rgba(0, 122, 255, 0.1); --nav-bg: rgba(255, 255, 255, 0.85); --border-color: #E5E5EA; --input-bg: #F2F2F7;
+  /* 蘋果標準淺色模式變數 */
+  --bg-color: #F2F2F7; 
+  --card-bg: #FFFFFF; 
+  --text-primary: #1C1C1E; 
+  --text-secondary: #8E8E93;
+  --blue: #007AFF; 
+  --blue-light: rgba(0, 122, 255, 0.1); 
+  --nav-bg: rgba(255, 255, 255, 0.85); 
+  --border-color: #E5E5EA; 
+  --input-bg: #F2F2F7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-color: #000000; --card-bg: #1C1C1E; --text-primary: #FFFFFF; --text-secondary: #EBEBF599;
-    --blue: #0A84FF; --blue-light: rgba(10, 132, 255, 0.15); --nav-bg: rgba(28, 28, 30, 0.85); --border-color: #38383A; --input-bg: #2C2C2E;
+    /* 蘋果標準深色模式變數 */
+    --bg-color: #000000; 
+    --card-bg: #1C1C1E; 
+    --text-primary: #FFFFFF; 
+    --text-secondary: #EBEBF599;
+    --blue: #0A84FF; 
+    --blue-light: rgba(10, 132, 255, 0.15); 
+    --nav-bg: rgba(28, 28, 30, 0.85); 
+    --border-color: #38383A; 
+    --input-bg: #2C2C2E;
   }
 }
 
-body { background: var(--bg-color); color: var(--text-primary); font-family: -apple-system, sans-serif; margin: 0; -webkit-font-smoothing: antialiased; }
+/* 蘋果原生字體與平滑處理 */
+body { background: var(--bg-color); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; -webkit-font-smoothing: antialiased; }
 .app-container { padding-bottom: 90px; min-height: 100vh; }
 .view { padding: 20px; }
-.page-title { font-size: 1.6rem; font-weight: 800; text-align: center; margin-bottom: 25px; letter-spacing: -0.5px;}
+.page-title { font-size: 1.8rem; font-weight: 800; text-align: center; margin-bottom: 25px; letter-spacing: -0.5px;}
 .section-title { font-size: 1.1rem; font-weight: 700; margin: 20px 0 10px 5px; color: var(--text-secondary); }
 
-.card { background: var(--card-bg); border-radius: 20px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 12px rgba(0,0,0,0.03); }
+/* iOS 風格圓角卡片與極淡陰影 */
+.card { background: var(--card-bg); border-radius: 20px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 24px rgba(0,0,0,0.04); }
 
 /* 分段控制器 (Segmented Control) */
 .segmented-control { display: flex; background: var(--border-color); border-radius: 8px; padding: 3px; margin-bottom: 20px; }
@@ -27,7 +45,7 @@ body { background: var(--bg-color); color: var(--text-primary); font-family: -ap
 .grid-2-home { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .dash-card { padding: 15px; text-align: left; }
 .dash-head { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600;}
-.dash-val { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+.dash-val { font-size: 1.4rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.5px;}
 .dash-sub { font-size: 0.75rem; color: var(--text-secondary); }
 .progress-bg { height: 6px; background: var(--border-color); border-radius: 3px; margin-top: 8px; overflow: hidden; }
 .progress-fill { height: 100%; background: #34C759; border-radius: 3px;}
@@ -76,7 +94,7 @@ body { background: var(--bg-color); color: var(--text-primary); font-family: -ap
 .settings-input { text-align: right; border: none; background: transparent; color: var(--text-secondary); font-size: 1rem; width: 120px; outline: none; font-family: inherit;}
 .save-settings-btn { width: 100%; margin-top: 25px; padding: 16px; background: var(--blue); color: white; border: none; border-radius: 16px; font-size: 1rem; font-weight: 600; }
 
-/* 導覽與懸浮 */
+/* iOS 原生毛玻璃導覽列 (Backdrop Blur) */
 .blur-nav { position: fixed; bottom: 0; width: 100%; height: 85px; background: var(--nav-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: flex; justify-content: space-around; padding-top: 10px; border-top: 0.5px solid var(--border-color); z-index: 100; }
 .tab-bar button { background: none; border: none; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: 5px; width: 60px; }
 .tab-bar button.active { color: var(--blue); }
@@ -84,7 +102,7 @@ body { background: var(--bg-color); color: var(--text-primary); font-family: -ap
 .fab-container { width: 60px; display: flex; justify-content: center; position: relative; }
 .scan-fab { position: absolute; top: -35px; width: 64px; height: 64px; background: var(--blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(10, 132, 255, 0.4); }
 
-/* 編輯視窗 */
+/* 編輯視窗 & 掃描動畫覆蓋層 */
 .edit-overlay { position: fixed; inset: 0; background: var(--bg-color); z-index: 900; overflow-y: auto; }
 .blur-header { position: sticky; top: 0; background: var(--nav-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 0.5px solid var(--border-color); z-index: 10; }
 .icon-btn { background: none; border: none; color: var(--blue); padding: 0; }
@@ -92,13 +110,13 @@ body { background: var(--bg-color); color: var(--text-primary); font-family: -ap
 .edit-content { padding: 20px; }
 .edit-group { margin-bottom: 15px; }
 .edit-group label { font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 6px; margin-left: 4px; }
-.edit-group input, .edit-group select { width: 100%; border: none; background: var(--input-bg); color: var(--text-primary); padding: 14px; border-radius: 12px; font-size: 1rem; box-sizing: border-box; }
+.edit-group input, .edit-group select { width: 100%; border: none; background: var(--input-bg); color: var(--text-primary); padding: 14px; border-radius: 12px; font-size: 1rem; box-sizing: border-box; outline: none; }
 .input-with-icon { position: relative; display: flex; align-items: center; background: var(--input-bg); border-radius: 12px;}
 .input-with-icon svg { position: absolute; left: 12px; }
 .input-with-icon input { padding-left: 36px; margin-bottom: 0; background: transparent; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 0.5px solid var(--border-color); padding-bottom: 10px; }
-.add-btn { color: var(--blue); font-size: 0.9rem; font-weight: 600; }
+.add-btn { color: var(--blue); font-size: 0.9rem; font-weight: 600; cursor: pointer; }
 .edit-item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 0.5px solid var(--border-color); }
 .item-names { flex: 1; margin-right: 15px; }
 .primary-input { background: transparent !important; padding: 0 !important; font-weight: 600; font-size: 1rem !important; margin-bottom: 4px !important; }
@@ -110,7 +128,9 @@ body { background: var(--bg-color); color: var(--text-primary); font-family: -ap
 .empty-state { text-align: center; padding: 30px; color: var(--text-secondary); font-size: 0.9rem; }
 .fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.processing-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px);}
+
+/* 掃描動畫 (深色半透明毛玻璃) */
+.processing-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .scan-window { width: 250px; height: 350px; border: 2px solid var(--blue); border-radius: 24px; position: relative; overflow: hidden; margin-bottom: 30px; box-shadow: 0 0 30px rgba(10,132,255,0.3);}
 .scan-line { width: 100%; height: 4px; background: linear-gradient(to bottom, transparent, var(--blue)); position: absolute; top: 0; animation: scan 2s infinite linear; }
 @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }

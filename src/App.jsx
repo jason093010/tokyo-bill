@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import './App.css';
@@ -13,11 +13,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory] = useState([]);
   
-  // ⚙️ 核心設定 
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('tripSettings');
     return saved ? JSON.parse(saved) : {
-      tripName: '東京之旅',
+      tripName: '日本中部北陸之旅',
       startDate: '2026-04-16',
       endDate: '2026-04-21',
       rate: 0.21,
@@ -32,8 +31,8 @@ function App() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
-  const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
+  const WORKER_URL = '[https://receipt-parser.jason093010.workers.dev](https://receipt-parser.jason093010.workers.dev)';
+  const SUPABASE_REST = '[https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions](https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions)'; 
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
 
   useEffect(() => { fetchData(); }, []);
@@ -57,10 +56,12 @@ function App() {
     return '東京';
   };
 
+  // 🚀 核心修正：加強掃描後的防呆處理
   const handleScan = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsProcessing(true);
+    
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = async () => {
@@ -70,8 +71,18 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: reader.result.split(',')[1], payer_avatar: 'Jason' }),
         });
+        
         const result = await response.json();
-        if (result.success) {
+        
+        if (result.success && result.data) {
+          // ⚠️ 防呆機制：如果 AI 辨識失敗或金額為 0，跳出警告並阻擋
+          if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
+            alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
+            setIsProcessing(false);
+            return; // 終止，不打開編輯畫面
+          }
+
+          // 辨識成功，進入確認畫面
           const autoRegion = determineRegion(result.data.receipt_date);
           setEditingItem({ 
             ...result.data, 
@@ -80,8 +91,12 @@ function App() {
             payer_avatar: 'Jason'
           });
           setIsConfirming(true);
+        } else {
+          alert("伺服器解析失敗，請稍後再試。");
         }
-      } catch (err) { alert("辨識失敗"); }
+      } catch (err) { 
+        alert("網路連線異常或辨識逾時。"); 
+      }
       finally { setIsProcessing(false); }
     };
   };
@@ -105,7 +120,6 @@ function App() {
     } catch (e) { alert("儲存失敗"); }
   };
 
-  // 🗑️ 新增：刪除單筆資料功能
   const deleteRecord = async (id) => {
     if (!window.confirm('確定要刪除這筆紀錄嗎？')) return;
     try {
@@ -113,11 +127,7 @@ function App() {
         method: 'DELETE',
         headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` }
       });
-      if (res.ok) {
-        fetchData(); // 刪除成功後重新讀取畫面
-      } else {
-        alert('刪除失敗，請檢查網路連線。');
-      }
+      if (res.ok) fetchData();
     } catch (e) { alert('刪除時發生錯誤'); }
   };
 
@@ -126,7 +136,6 @@ function App() {
     alert('設定已更新');
   };
 
-  // 🧮 運算邏輯
   const totalJPY = history.reduce((s,i) => s + Number(i.amount_jpy), 0);
   const todayStr = new Date().toISOString().split('T')[0];
   const todayJPY = history.filter(h => h.receipt_date === todayStr).reduce((s,i) => s + Number(i.amount_jpy), 0);
@@ -143,11 +152,9 @@ function App() {
     return `Day ${Math.floor((today - start) / 86400000) + 1} / ${totalDays} 天`;
   };
 
-  // --- 視圖元件 ---
   const HomeView = () => (
     <div className="view fade-in">
       <h1 className="page-title">{settings.tripName}</h1>
-      
       <div className="grid-2-home">
         <div className="card dash-card">
           <div className="dash-head"><Banknote size={16} color="#FF9500"/> 今日支出</div>
@@ -174,9 +181,7 @@ function App() {
       <div className="list-container">
         {history.filter(h => h.receipt_date === todayStr).map((item, i) => (
           <div key={i} className="item-card" onClick={() => { setEditingItem(item); setIsConfirming(true); }}>
-            <div className="item-icon-box" style={{background: 'var(--blue-light)', color: 'var(--blue)'}}>
-              {item.payer_avatar?.substring(0,1) || '我'}
-            </div>
+            <div className="item-icon-box" style={{background: 'var(--blue-light)', color: 'var(--blue)'}}>{item.payer_avatar?.substring(0,1) || '我'}</div>
             <div className="item-info">
               <div className="name">{item.shop_name}</div>
               <div className="meta"><span className="tag">{item.category}</span> {item.payment_method} · {item.location}</div>
@@ -224,9 +229,7 @@ function App() {
             </div>
             {items.map((item, i) => (
               <div key={i} className="item-card shadow" onClick={() => { setEditingItem(item); setIsConfirming(true); }}>
-                <div className="item-icon-box" style={{background: 'var(--blue-light)', color: 'var(--blue)'}}>
-                  {item.payer_avatar?.substring(0,1) || '我'}
-                </div>
+                <div className="item-icon-box" style={{background: 'var(--blue-light)', color: 'var(--blue)'}}>{item.payer_avatar?.substring(0,1) || '我'}</div>
                 <div className="item-info">
                   <div className="name">{item.shop_name}</div>
                   <div className="meta"><span className="tag">{item.category}</span> {item.payment_method} · {item.tax_type}</div>
@@ -235,7 +238,6 @@ function App() {
                   <div className="jpy">¥{item.amount_jpy}</div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
                     <Edit3 size={15} color="var(--text-secondary)" />
-                    {/* 🗑️ 點擊垃圾桶時會攔截事件 (stopPropagation)，避免打開編輯視窗 */}
                     <Trash2 size={15} color="#FF3B30" onClick={(e) => { e.stopPropagation(); deleteRecord(item.id); }} />
                   </div>
                 </div>
@@ -314,44 +316,24 @@ function App() {
     <div className="view fade-in">
       <h1 className="page-title">設定</h1>
       <div className="menu-group">
-        <div className="menu-item">
-          <span>旅程名稱</span>
-          <input className="settings-input" style={{textAlign:'right', width:'150px'}} value={settings.tripName} onChange={e => setSettings({...settings, tripName: e.target.value})} />
-        </div>
-        <div className="menu-item">
-          <span>出發日期</span>
-          <input type="date" className="settings-input" value={settings.startDate} onChange={e => setSettings({...settings, startDate: e.target.value})} />
-        </div>
-        <div className="menu-item">
-          <span>結束日期</span>
-          <input type="date" className="settings-input" value={settings.endDate} onChange={e => setSettings({...settings, endDate: e.target.value})} />
-        </div>
+        <div className="menu-item"><span>旅程名稱</span><input className="settings-input" style={{textAlign:'right', width:'150px'}} value={settings.tripName} onChange={e => setSettings({...settings, tripName: e.target.value})} /></div>
+        <div className="menu-item"><span>出發日期</span><input type="date" className="settings-input" value={settings.startDate} onChange={e => setSettings({...settings, startDate: e.target.value})} /></div>
+        <div className="menu-item"><span>結束日期</span><input type="date" className="settings-input" value={settings.endDate} onChange={e => setSettings({...settings, endDate: e.target.value})} /></div>
       </div>
-
       <div className="menu-group" style={{marginTop:'20px'}}>
-        <div className="menu-item">
-          <span>匯率 (JPY to TWD)</span>
-          <input type="number" step="0.001" className="settings-input" value={settings.rate} onChange={e => setSettings({...settings, rate: Number(e.target.value)})} />
-        </div>
-        <div className="menu-item">
-          <span>預算 (JPY)</span>
-          <input type="number" className="settings-input" value={settings.budget} onChange={e => setSettings({...settings, budget: Number(e.target.value)})} />
-        </div>
-        <div className="menu-item">
-          <span>分帳人數</span>
+        <div className="menu-item"><span>匯率 (JPY to TWD)</span><input type="number" step="0.001" className="settings-input" value={settings.rate} onChange={e => setSettings({...settings, rate: Number(e.target.value)})} /></div>
+        <div className="menu-item"><span>預算 (JPY)</span><input type="number" className="settings-input" value={settings.budget} onChange={e => setSettings({...settings, budget: Number(e.target.value)})} /></div>
+        <div className="menu-item"><span>分帳人數</span>
           <div className="input-with-icon" style={{width:'80px', paddingRight:'10px'}}>
             <Users size={16} color="var(--text-secondary)" />
             <input type="number" style={{width:'100%', border:'none', background:'transparent', textAlign:'right', outline:'none', color:'var(--text-primary)'}} value={settings.split} onChange={e => setSettings({...settings, split: Number(e.target.value)})} />
           </div>
         </div>
       </div>
-
       <div className="menu-group" style={{marginTop:'20px'}}>
         <div className="menu-item" style={{flexDirection:'column', alignItems:'flex-start'}}>
           <span style={{marginBottom:'10px'}}>行程地區 (自動判斷用)</span>
-          <textarea className="settings-input" style={{width:'100%', height:'80px', textAlign:'left', padding:'10px', background:'var(--bg-color)', borderRadius:'8px'}} 
-            value={settings.schedule} onChange={e => setSettings({...settings, schedule: e.target.value})} placeholder="例如:&#10;東京 4/16-4/21"
-          />
+          <textarea className="settings-input" style={{width:'100%', height:'80px', textAlign:'left', padding:'10px', background:'var(--bg-color)', borderRadius:'8px'}} value={settings.schedule} onChange={e => setSettings({...settings, schedule: e.target.value})} placeholder="例如:&#10;東京 4/16-4/21" />
         </div>
       </div>
       <button className="save-settings-btn" onClick={saveSettings}>儲存設定</button>
@@ -379,10 +361,7 @@ function App() {
         
         <div className="edit-content">
           <div className="card">
-            <div className="edit-group">
-              <label>店家名稱</label>
-              <input value={editingItem.shop_name} onChange={e => setEditingItem({...editingItem, shop_name: e.target.value})} />
-            </div>
+            <div className="edit-group"><label>店家名稱</label><input value={editingItem.shop_name} onChange={e => setEditingItem({...editingItem, shop_name: e.target.value})} /></div>
             <div className="grid-2">
               <div className="edit-group"><label>日期</label><input type="date" value={editingItem.receipt_date} onChange={e => setEditingItem({...editingItem, receipt_date: e.target.value})} /></div>
               <div className="edit-group"><label>分類</label>
@@ -393,10 +372,7 @@ function App() {
             </div>
             <div className="grid-2">
               <div className="edit-group"><label>地區</label>
-                <div className="input-with-icon">
-                  <MapPin size={16} color="var(--text-secondary)" />
-                  <input value={editingItem.location} onChange={e => setEditingItem({...editingItem, location: e.target.value})} />
-                </div>
+                <div className="input-with-icon"><MapPin size={16} color="var(--text-secondary)" /><input value={editingItem.location} onChange={e => setEditingItem({...editingItem, location: e.target.value})} /></div>
               </div>
               <div className="edit-group"><label>付款方式</label>
                 <select value={editingItem.payment_method} onChange={e => setEditingItem({...editingItem, payment_method: e.target.value})}>
@@ -405,11 +381,8 @@ function App() {
               </div>
             </div>
             <div className="grid-2">
-              <div className="edit-group"><label>記帳人 (分帳用)</label>
-                <div className="input-with-icon">
-                  <Users size={16} color="var(--text-secondary)" />
-                  <input value={editingItem.payer_avatar} onChange={e => setEditingItem({...editingItem, payer_avatar: e.target.value})} placeholder="例如：Jason" />
-                </div>
+              <div className="edit-group"><label>記帳人</label>
+                <div className="input-with-icon"><Users size={16} color="var(--text-secondary)" /><input value={editingItem.payer_avatar} onChange={e => setEditingItem({...editingItem, payer_avatar: e.target.value})} /></div>
               </div>
               <div className="edit-group"><label>稅制</label>
                 <select value={editingItem.tax_type} onChange={e => setEditingItem({...editingItem, tax_type: e.target.value})}>
