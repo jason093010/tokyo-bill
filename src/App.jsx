@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle, Image as ImageIcon, Plus, PenSquare
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle, Image as ImageIcon, Plus, PenSquare, Languages
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
 
-const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FFCC00'];
+// 🚀 新增翻譯分類的顏色
+const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FFCC00', '#A2845E'];
 const PAY_COLORS = ['#34C759', '#007AFF', '#FF2D55', '#5AC8FA'];
+
+// 定義 Worker 處理類型
+const TYPE_RECEIPT_PARSE = 'receipt';
+const TYPE_TRANSLATE_JP = 'translate_jp';
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -20,7 +25,7 @@ function App() {
       tripName: parsed.tripName || '日本中部北陸之旅',
       startDate: parsed.startDate || '2026-04-16',
       endDate: parsed.endDate || '2026-04-21',
-      rate: parsed.rate || 0.21,
+      rate: parsed.rate || 0.207,
       budget: parsed.budget || 200000,
       split: parsed.split || 10,
       schedule: parsed.schedule || "東京 4/16-4/21" 
@@ -32,9 +37,10 @@ function App() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
   
-  // 🚀 新增狀態：控制 Action Sheet 的顯示
   const [showActionSheet, setShowActionSheet] = useState(false);
-  // 用來觸發隱藏的 input file
+  // 用來區分當前 Action Sheet 是為了「記帳」還是「翻譯」
+  const [actionSheetContext, setActionSheetContext] = useState(TYPE_RECEIPT_PARSE);
+  
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -85,50 +91,84 @@ function App() {
     });
   };
 
+  // 🚀 修改：統一的檔案選擇處理函式，根據 context 決定呼叫哪個邏輯
   const handleFileSelect = async (e) => {
-    setShowActionSheet(false); // 關閉選單
+    setShowActionSheet(false);
     const file = e.target.files[0];
     if (!file) return;
     setIsProcessing(true);
     
     try {
       const compressedBase64 = await compressImage(file);
-      const response = await fetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: compressedBase64, payer_avatar: 'Jason' }),
-      });
       
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
-          alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
-          setIsProcessing(false);
-          return; 
-        }
-
-        const autoRegion = determineRegion(result.data.receipt_date);
-        setEditingItem({ 
-          ...result.data, 
-          location: autoRegion,
-          tax_type: result.data.tax_type || '内税',
-          payer_avatar: 'Jason'
-        });
-        setIsConfirming(true);
+      // 🚀 關鍵邏輯切換：如果上下文是翻譯，呼叫翻譯 API
+      if (actionSheetContext === TYPE_TRANSLATE_JP) {
+        await handleTranslateJp(compressedBase64);
       } else {
-        alert(`解析失敗: ${result.error || '未知的 AI 錯誤'}`);
+        await handleReceiptParse(compressedBase64);
       }
+      
     } catch (err) { 
       alert(`網路連線異常或辨識逾時，請確認網路狀態。\n錯誤代碼: ${err.message}`); 
     }
     finally { 
       setIsProcessing(false); 
-      e.target.value = ''; // 重置 input 以便下次能選同一張照片
+      e.target.value = ''; // 重置 input
     }
   };
 
-  // 🚀 新增：手動建立空白表單的功能
+  // 🛡️ 原有的記帳辨識邏輯 (移出 handleFileSelect)
+  const handleReceiptParse = async (base64Data) => {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: base64Data, payer_avatar: 'Jason', type: TYPE_RECEIPT_PARSE }),
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
+        alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
+        return; 
+      }
+
+      const autoRegion = determineRegion(result.data.receipt_date);
+      setEditingItem({ 
+        ...result.data, 
+        location: autoRegion,
+        tax_type: result.data.tax_type || '内税',
+        payer_avatar: 'Jason'
+      });
+      setIsConfirming(true);
+    } else {
+      alert(`記帳解析失敗: ${result.error || '未知的 AI 錯誤'}`);
+    }
+  };
+
+  // 🚀 新增：處理日文翻譯的邏輯
+  const handleTranslateJp = async (base64Data) => {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: base64Data, type: TYPE_TRANSLATE_JP }),
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      // 建立一個特殊的資料結構來顯示翻譯結果
+      setEditingItem({
+        type: TYPE_TRANSLATE_JP,
+        ...result.data, // 預期 Worker 回傳 { original_text: '...', translated_text: '...', price_jpy: number | null }
+        dedupe_id: `${Date.now()}_translate`
+      });
+      setIsConfirming(true);
+    } else {
+      alert(`翻譯失敗: ${result.error || '未知的 AI 錯誤'}`);
+    }
+  };
+
   const handleManualEntry = () => {
     setShowActionSheet(false);
     const today = new Date().toISOString().split('T')[0];
@@ -148,6 +188,10 @@ function App() {
   };
 
   const saveToDB = async (item) => {
+    if (item.type === TYPE_TRANSLATE_JP) {
+      alert("此為翻譯結果，無法直接儲存為帳目。請手動建立記帳項目。");
+      return;
+    }
     if (!item.shop_name || !item.amount_jpy) {
       alert("請輸入店名與總金額！");
       return;
@@ -412,6 +456,45 @@ function App() {
   }
 
   if (isConfirming && editingItem) {
+    // 🚀 關鍵修復：如果是翻譯類型，顯示特定的翻譯對照畫面
+    if (editingItem.type === TYPE_TRANSLATE_JP) {
+      return (
+        <div className="edit-overlay fade-in">
+          <nav className="edit-nav blur-header">
+            <button className="icon-btn" onClick={() => setIsConfirming(false)}><X size={24} /></button>
+            <h2 style={{color: 'var(--text-primary)'}}>翻譯結果</h2>
+            <div style={{width: '32px'}}></div> {/* 保持標題置中 */}
+          </nav>
+          
+          <div className="edit-content">
+            <div className="card">
+              <div className="list-header"><h3 style={{color: 'var(--text-primary)'}}>日文原文 (OCR)</h3></div>
+              <p style={{whiteSpace: 'pre-wrap', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.5'}}>{editingItem.original_text || '無法偵測到文字'}</p>
+            </div>
+
+            <div className="card">
+              <div className="list-header"><h3 style={{color: 'var(--blue)'}}>繁中翻譯 (AI)</h3></div>
+              <p style={{whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: '500', lineHeight: '1.6'}}>{editingItem.translated_text || '翻譯失敗'}</p>
+            </div>
+
+            {/* 🚀 新增反人類修復：如果有掃描到金額，顯示匯率換算提示卡 */}
+            {editingItem.price_jpy && (
+              <div className="card" style={{background: 'var(--blue-light)', border: '1px solid var(--blue)'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div className="dash-head" style={{color: 'var(--blue)', marginBottom: 0}}><Banknote size={16}/> 偵測到金額 (日幣)</div>
+                  <div className="jpy" style={{color: 'var(--blue)', fontSize: '1.3rem'}}>¥{editingItem.price_jpy.toLocaleString()}</div>
+                </div>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop: '10px', paddingTop: '10px', borderTop: '0.5px solid var(--border-color)'}}>
+                  <div className="dash-sub" style={{color: 'var(--blue)'}}>折合台幣 (匯率 {settings.rate})</div>
+                  <div className="twd" style={{color: 'var(--blue)', fontWeight:'600'}}>≈ NT${Math.round(editingItem.price_jpy * settings.rate).toLocaleString()}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="edit-overlay fade-in">
         <nav className="edit-nav blur-header">
@@ -426,7 +509,6 @@ function App() {
             <div className="grid-2">
               <div className="edit-group"><label>日期</label><input type="date" value={editingItem.receipt_date} onChange={e => setEditingItem({...editingItem, receipt_date: e.target.value})} /></div>
               <div className="edit-group"><label>分類</label>
-                {/* 🚀 擴充分類：加入娛樂與生活 */}
                 <select value={editingItem.category} onChange={e => setEditingItem({...editingItem, category: e.target.value})}>
                   <option>餐飲</option><option>購物</option><option>交通</option><option>住宿</option><option>門票</option><option>娛樂</option><option>生活</option><option>藥品</option><option>其他</option>
                 </select>
@@ -477,13 +559,12 @@ function App() {
                     setEditingItem({...editingItem, items: newItems});
                   }} />
                 </div>
-                {/* 🚀 新增功能：刪除單筆明細 */}
                 <button 
                   onClick={() => {
                     const newItems = editingItem.items.filter((_, index) => index !== idx);
                     setEditingItem({...editingItem, items: newItems});
                   }}
-                  style={{position: 'absolute', right: 0, top: '15px', background:'none', border:'none', color:'#FF3B30', padding: '5px'}}
+                  style={{position: 'absolute', right: 0, top: '15px', background:'none', border:'none', color:'#FF3B30', padding: '5px', cursor: 'pointer'}}
                 >
                   <X size={18} />
                 </button>
@@ -505,14 +586,18 @@ function App() {
         {activeTab === 'settings' && <SettingsView />}
       </main>
       
-      {/* 🚀 新增：iOS 風格底部彈出選單 (Action Sheet) */}
       {showActionSheet && (
         <div className="action-sheet-overlay" onClick={() => setShowActionSheet(false)}>
           <div className="action-sheet fade-up" onClick={e => e.stopPropagation()}>
             <div className="sheet-menu">
-              <button onClick={() => cameraInputRef.current.click()}><Camera size={20} /> 拍照掃描</button>
-              <button onClick={() => fileInputRef.current.click()}><ImageIcon size={20} /> 從相簿選擇</button>
-              <button onClick={handleManualEntry}><PenSquare size={20} /> 手動輸入紀錄</button>
+              {/* 🚀 修改：統一呼叫隱藏的 input，由 context 決定處理方式 */}
+              <button onClick={() => { setActionSheetContext(TYPE_RECEIPT_PARSE); cameraInputRef.current.click(); }}><Camera size={20} /> 📸 拍攝收據 (記帳用)</button>
+              <button onClick={() => { setActionSheetContext(TYPE_TRANSLATE_JP); cameraInputRef.current.click(); }}><Languages size={20} style={{color:CAT_COLORS[9]}} />  Languages 📸 拍攝翻譯 (日文對照)</button>
+              <div style={{borderBottom: '0.5px solid var(--border-color)', margin: '0 15px'}}></div>
+              <button onClick={() => { setActionSheetContext(TYPE_RECEIPT_PARSE); fileInputRef.current.click(); }}><ImageIcon size={20} /> 🖼️ 從相簿選擇 (記帳用)</button>
+              <button onClick={() => { setActionSheetContext(TYPE_TRANSLATE_JP); fileInputRef.current.click(); }}><ImageIcon size={20} style={{color:CAT_COLORS[9]}} /> 🖼️ 從相簿選擇 (日文對照)</button>
+              <div style={{borderBottom: '0.5px solid var(--border-color)', margin: '0 15px'}}></div>
+              <button onClick={handleManualEntry}><PenSquare size={20} /> ✏️ 手動輸入紀錄</button>
             </div>
             <button className="sheet-cancel" onClick={() => setShowActionSheet(false)}>取消</button>
           </div>
@@ -527,7 +612,7 @@ function App() {
         <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}><Home size={22} /><span>首頁</span></button>
         <button className={activeTab === 'records' ? 'active' : ''} onClick={() => setActiveTab('records')}><List size={22} /><span>紀錄</span></button>
         <div className="fab-container">
-          <div className="scan-fab shadow-lg" onClick={() => setShowActionSheet(true)}>
+          <div className="scan-fab shadow-lg" onClick={() => { setActionSheetContext(TYPE_RECEIPT_PARSE); setShowActionSheet(true); }}>
             <Camera size={26} color="#fff" />
           </div>
         </div>
