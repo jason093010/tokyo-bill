@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, AlertCircle
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
 
 const CAT_COLORS = ['#007AFF', '#FF9500', '#FF2D55', '#34C759', '#AF52DE', '#FF3B30', '#8E8E93'];
@@ -31,8 +31,8 @@ function App() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const WORKER_URL = '[https://receipt-parser.jason093010.workers.dev](https://receipt-parser.jason093010.workers.dev)';
-  const SUPABASE_REST = '[https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions](https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions)'; 
+  const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
+  const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
 
   useEffect(() => { fetchData(); }, []);
@@ -56,49 +56,69 @@ function App() {
     return '東京';
   };
 
-  // 🚀 核心修正：加強掃描後的防呆處理
+  // 🚀 新增：圖片自動壓縮引擎 (避免 5MB 照片塞爆伺服器導致逾時)
+  const compressImage = (file, maxWidth = 1024) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ratio = Math.min(maxWidth / img.width, 1);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // 壓縮為 JPEG，品質 70%
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+          resolve(compressedBase64);
+        };
+      };
+    });
+  };
+
   const handleScan = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsProcessing(true);
     
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onloadend = async () => {
-      try {
-        const response = await fetch(WORKER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: reader.result.split(',')[1], payer_avatar: 'Jason' }),
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-          // ⚠️ 防呆機制：如果 AI 辨識失敗或金額為 0，跳出警告並阻擋
-          if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
-            alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
-            setIsProcessing(false);
-            return; // 終止，不打開編輯畫面
-          }
-
-          // 辨識成功，進入確認畫面
-          const autoRegion = determineRegion(result.data.receipt_date);
-          setEditingItem({ 
-            ...result.data, 
-            location: autoRegion,
-            tax_type: result.data.tax_type || '内税',
-            payer_avatar: 'Jason'
-          });
-          setIsConfirming(true);
-        } else {
-          alert("伺服器解析失敗，請稍後再試。");
+    try {
+      // 1. 先在手機端將圖片壓縮 (瞬間完成)
+      const compressedBase64 = await compressImage(file);
+      
+      // 2. 傳送輕量化圖片給 Cloudflare
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: compressedBase64, payer_avatar: 'Jason' }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        if (result.data.shop_name === "辨識失敗" || !result.data.amount_jpy) {
+          alert("⚠️ 收據影像太模糊或反光，AI 無法讀取內容。請換個角度重新拍攝！");
+          setIsProcessing(false);
+          return; 
         }
-      } catch (err) { 
-        alert("網路連線異常或辨識逾時。"); 
+
+        const autoRegion = determineRegion(result.data.receipt_date);
+        setEditingItem({ 
+          ...result.data, 
+          location: autoRegion,
+          tax_type: result.data.tax_type || '内税',
+          payer_avatar: 'Jason'
+        });
+        setIsConfirming(true);
+      } else {
+        alert(`解析失敗: ${result.error || '未知的 AI 錯誤'}`);
       }
-      finally { setIsProcessing(false); }
-    };
+    } catch (err) { 
+      alert(`網路連線異常或辨識逾時，請確認網路狀態。\n錯誤代碼: ${err.message}`); 
+    }
+    finally { setIsProcessing(false); }
   };
 
   const saveToDB = async (item) => {
@@ -154,26 +174,27 @@ function App() {
 
   const HomeView = () => (
     <div className="view fade-in">
-      <h1 className="page-title">{settings.tripName}</h1>
+      {/* 修正了深色模式下標題字體可能會消失的問題 */}
+      <h1 className="page-title" style={{color: 'var(--text-primary)'}}>{settings.tripName}</h1>
       <div className="grid-2-home">
         <div className="card dash-card">
           <div className="dash-head"><Banknote size={16} color="#FF9500"/> 今日支出</div>
-          <div className="dash-val">¥{todayJPY.toLocaleString()}</div>
+          <div className="dash-val" style={{color: 'var(--text-primary)'}}>¥{todayJPY.toLocaleString()}</div>
           <div className="dash-sub">≈ NT${Math.round(todayJPY * settings.rate).toLocaleString()}</div>
         </div>
         <div className="card dash-card">
           <div className="dash-head"><BarChart3 size={16} color="#007AFF"/> 旅程累計</div>
-          <div className="dash-val">¥{totalJPY.toLocaleString()}</div>
+          <div className="dash-val" style={{color: 'var(--text-primary)'}}>¥{totalJPY.toLocaleString()}</div>
           <div className="dash-sub">均分: NT${Math.round((totalJPY * settings.rate) / settings.split).toLocaleString()}</div>
         </div>
         <div className="card dash-card">
           <div className="dash-head"><Target size={16} color="#34C759"/> 預算進度</div>
-          <div className="dash-val">{budgetPercent}%</div>
+          <div className="dash-val" style={{color: 'var(--text-primary)'}}>{budgetPercent}%</div>
           <div className="progress-bg"><div className="progress-fill" style={{width: `${budgetPercent}%`}}></div></div>
         </div>
         <div className="card dash-card">
           <div className="dash-head"><CalendarDays size={16} color="#FF2D55"/> 旅程狀態</div>
-          <div className="dash-val" style={{fontSize: '1.1rem', marginTop: '6px'}}>{getTripStatus()}</div>
+          <div className="dash-val" style={{fontSize: '1.1rem', marginTop: '6px', color: 'var(--text-primary)'}}>{getTripStatus()}</div>
         </div>
       </div>
 
@@ -212,7 +233,7 @@ function App() {
       <div className="view fade-in">
         <div className="card total-banner">
           <div className="sub">旅程總支出</div>
-          <div className="val">¥{totalJPY.toLocaleString()}</div>
+          <div className="val" style={{color: 'var(--text-primary)'}}>¥{totalJPY.toLocaleString()}</div>
           <div className="meta">≈ NT${Math.round(totalJPY * settings.rate).toLocaleString()} · {history.length} 筆</div>
         </div>
 
@@ -292,7 +313,7 @@ function App() {
 
     return (
       <div className="view fade-in">
-        <h1 className="page-title">統計分析</h1>
+        <h1 className="page-title" style={{color: 'var(--text-primary)'}}>統計分析</h1>
         <StatBlock title="分類支出" data={catData} colors={CAT_COLORS} />
         <StatBlock title="支付方式" data={payData} colors={PAY_COLORS} />
         <div className="card">
@@ -314,7 +335,7 @@ function App() {
 
   const SettingsView = () => (
     <div className="view fade-in">
-      <h1 className="page-title">設定</h1>
+      <h1 className="page-title" style={{color: 'var(--text-primary)'}}>設定</h1>
       <div className="menu-group">
         <div className="menu-item"><span>旅程名稱</span><input className="settings-input" style={{textAlign:'right', width:'150px'}} value={settings.tripName} onChange={e => setSettings({...settings, tripName: e.target.value})} /></div>
         <div className="menu-item"><span>出發日期</span><input type="date" className="settings-input" value={settings.startDate} onChange={e => setSettings({...settings, startDate: e.target.value})} /></div>
@@ -355,7 +376,7 @@ function App() {
       <div className="edit-overlay fade-in">
         <nav className="edit-nav blur-header">
           <button className="icon-btn" onClick={() => setIsConfirming(false)}><X size={24} /></button>
-          <h2>確認內容</h2>
+          <h2 style={{color: 'var(--text-primary)'}}>確認內容</h2>
           <button onClick={() => saveToDB(editingItem)} className="save-btn">儲存</button>
         </nav>
         
@@ -396,11 +417,11 @@ function App() {
           </div>
 
           <div className="card">
-            <div className="list-header"><h3>購買明細</h3><span className="add-btn" onClick={() => setEditingItem({...editingItem, items: [...(editingItem.items||[]), {translated_name:'', price:0}]})}>+ 新增品項</span></div>
+            <div className="list-header"><h3 style={{color: 'var(--text-primary)'}}>購買明細</h3><span className="add-btn" onClick={() => setEditingItem({...editingItem, items: [...(editingItem.items||[]), {translated_name:'', price:0}]})}>+ 新增品項</span></div>
             {editingItem.items && editingItem.items.map((item, idx) => (
               <div key={idx} className="edit-item-row">
                 <div className="item-names">
-                  <input className="primary-input" placeholder="中文品名" value={item.translated_name} onChange={e => {
+                  <input className="primary-input" placeholder="中文品名" value={item.translated_name || ''} onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].translated_name = e.target.value;
                     setEditingItem({...editingItem, items: newItems});
@@ -409,7 +430,7 @@ function App() {
                 </div>
                 <div className="item-val">
                   <span className="currency-symbol">¥</span>
-                  <input type="number" value={item.price} onChange={e => {
+                  <input type="number" value={item.price || 0} onChange={e => {
                     const newItems = [...editingItem.items];
                     newItems[idx].price = Number(e.target.value);
                     setEditingItem({...editingItem, items: newItems});
