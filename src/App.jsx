@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Camera, List, BarChart3, Settings, Home, 
-  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2
+  X, Banknote, Target, CalendarDays, MapPin, Edit3, Users, Trash2, Link2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import './App.css';
@@ -13,13 +13,14 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory] = useState([]);
   
+  // ⚙️ 核心設定 
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('tripSettings');
     return saved ? JSON.parse(saved) : {
-      tripName: '日本中部北陸之旅',
+      tripName: '日本之旅',
       startDate: '2026-04-16',
       endDate: '2026-04-21',
-      rate: 0.21,
+      rate: 0.207,
       budget: 200000,
       split: 10,
       schedule: "東京 4/16-4/21" 
@@ -31,6 +32,7 @@ function App() {
   const [editingItem, setEditingItem] = useState(null); 
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // 請確保在 .env 檔案中設定以下變數，並在 Cloudflare Worker 中手動部署後端代碼
   const WORKER_URL = 'https://receipt-parser.jason093010.workers.dev';
   const SUPABASE_REST = 'https://ghgqnwqedfevtklaglok.supabase.co/rest/v1/transactions'; 
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZ3Fud3FlZGZldnRrbGFnbG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDE4MjAsImV4cCI6MjA5MTU3NzgyMH0.ErjvsqQboBjJgasCBjQhiwxkGpRyrvaMLBuOb2bmpHc';
@@ -56,7 +58,6 @@ function App() {
     return '東京';
   };
 
-  // 🚀 新增：圖片自動壓縮引擎 (避免 5MB 照片塞爆伺服器導致逾時)
   const compressImage = (file, maxWidth = 1024) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -195,6 +196,18 @@ function App() {
         <div className="card dash-card">
           <div className="dash-head"><CalendarDays size={16} color="#FF2D55"/> 旅程狀態</div>
           <div className="dash-val" style={{fontSize: '1.1rem', marginTop: '6px', color: 'var(--text-primary)'}}>{getTripStatus()}</div>
+        </div>
+      </div>
+      
+      {/* ✅ 行程地區與匯率警示卡片 */}
+      <div className="card" style={{padding: '12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'15px'}}>
+        <div style={{display:'flex', alignItems:'center', gap: '8px', color:'var(--blue)'}}>
+          <MapPin size={16} />
+          <span style={{fontSize:'0.9rem', fontStyle:'italic'}}>{determineRegion(todayStr)} 行程中</span>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap: '8px', color:'var(--text-secondary)'}}>
+          <span style={{fontSize:'0.85rem'}}>匯率: {settings.rate}</span>
+          <AlertCircle size={15} style={{color: 'var(--blue)'}} />
         </div>
       </div>
 
